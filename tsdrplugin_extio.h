@@ -22,7 +22,8 @@ extern "C"
 
 struct Ui_TSDRPlugin_ExtIO; // An opaque type that we'll use as a handle
 typedef struct Ui_TSDRPlugin_ExtIO Ui_TSDRPlugin_ExtIO;
-
+struct QMessageBox;
+typedef struct QMessageBox QMessageBox;
 #ifdef __cplusplus
 }
 #endif
@@ -33,9 +34,11 @@ class TSDRPlugin_ExtIO : public QMainWindow
     Q_OBJECT
 
 public:
-    void DisableCombo();
     TSDRPlugin_ExtIO(QWidget *parent = nullptr);
     ~TSDRPlugin_ExtIO();
+    int Start_Thread();
+    int Stop_Thread();
+    //void  ThreadProc(void *p);
 
 private:
     Ui::TSDRPlugin_ExtIO *ui;

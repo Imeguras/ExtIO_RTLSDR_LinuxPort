@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <string>
 #include <QDebug>
+#include <QMessageBox>
+#include <thread>
 //#include <commctrl.h> #include <process.h> #include <tchar.h>
 //#include "resource.h"
 #include "rtl-sdr.h"
@@ -86,6 +88,8 @@ static device *connected_devices = NULL;
 static rtlsdr_dev_t *dev = NULL;
 static int device_count = 0;
 
+
+
 void ThreadProc(void * param);
 
 int Start_Thread();
@@ -103,9 +107,7 @@ void (* WinradCallBack)(int, int, float, void *) = NULL;
 #define WINRAD_ATTCHANGE 125
 
 Ui_TSDRPlugin_ExtIO* handle;
-//TODO?
-//static int * MainDlgProc(QWidget, uint32_t , const char* , long );
-//Windows Handle
+QMessageBox* msgBox;
 
 //HWND h_dialog=NULL;
 
@@ -116,24 +118,14 @@ TSDRPlugin_ExtIO::TSDRPlugin_ExtIO(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::TSDRPlugin_ExtIO)
 {
-
+    QMessageBox messageBox;
     ui->setupUi(this);
     handle=this->ui;
-}
-void TSDRPlugin_ExtIO::DisableCombo(){
-    ui->DeviceComboBox->setEnabled(false);
-}
-/*void TSDRPlugin_ExtIO::DisableComponent(const char * str){
+    msgBox=&messageBox;
 
-     //qDebug()<<this->findChild<QWidget>(str).property("enabled");
-
-    foreach( QObject *const t,this->children()){
-        qDebug()<< t->property("objectName");
-        if(t->property("objectName")==str){
-            t->setProperty("enabled", false);
-        }
-    }
-}*/
+    //InitHW(name, model, tipe);
+    //MainCallback();
+}
 
 TSDRPlugin_ExtIO::~TSDRPlugin_ExtIO()
 {
@@ -141,16 +133,18 @@ TSDRPlugin_ExtIO::~TSDRPlugin_ExtIO()
 }
 
 
+//bool  LIBRTL_API __stdcall InitHW(char *name, char *model, int& type)
 
 extern "C"
-//bool  LIBRTL_API __stdcall InitHW(char *name, char *model, int& type)
 bool InitHW(char *name, char *model, int& type){
     //MessageBox(NULL, TEXT("InitHW"),NULL, MB_OK);
-    device_count = rtlsdr_get_device_count();
-    if (!device_count)
-    {
-        //MessageBox(NULL,TEXT("No RTLSDR devices found"), TEXT("ExtIO RTL"), MB_ICONERROR | MB_OK);
 
+
+    device_count = rtlsdr_get_device_count();
+    if (!device_count){
+        reinterpret_cast<QMessageBox *>(msgBox)->setText("No RTLSDR devices found");
+        reinterpret_cast<QMessageBox *>(msgBox)->exec();
+        qDebug() << "No RTLSDR devices found";
         return false;
     }
 
@@ -166,6 +160,7 @@ bool InitHW(char *name, char *model, int& type){
     //name[15]=0;
     //model[15]=0;
     //
+    //TOCHECK whats the point here?
     type = EXTIO_HWTYPE_16B; /* ExtIO type 16-bit samples */
 
     return true;
@@ -453,7 +448,6 @@ int ExtIoGetSetting( int idx, char * description, char * value ){
         }
         case 3:	{
                 snprintf( description, 1024, "%s", "Frequency_Correction" );
-                char ppm[255];
                 //Edit_GetText(GetDlgItem(h_dialog,IDC_PPM), ppm, 255 );
                 snprintf( value, 1024, "%d", reinterpret_cast<Ui_TSDRPlugin_ExtIO *>(handle)->FrequencyCorrectionSpin->value() );
                 return 0;
@@ -494,7 +488,9 @@ int ExtIoGetSetting( int idx, char * description, char * value ){
             snprintf( value, 1024, "%d",  ret);
             return 0;
         }
-        default:	return -1;
+        //RANT HOL... PiCk a indentation style its barely readable
+        default:
+            return -1;
     }
     return -1;
 }
@@ -611,7 +607,6 @@ void SetCallback(void (* pfnExtIOCallback)(int cnt, int status, float IQoffs, vo
     return;
 }
 
-
 void RTLSDRCallBack(unsigned char *buf, uint32_t len, void *ctx)
 {
     if(len == buffer_len)
@@ -629,25 +624,28 @@ void RTLSDRCallBack(unsigned char *buf, uint32_t len, void *ctx)
     }
 }
 
-//TODO MULTITHREADING
-int Start_Thread(){
+int TSDRPlugin_ExtIO::Start_Thread(){
+    //TODO CHECK:
     //If already running, exit
+
+
     //if(worker_handle != INVALID_HANDLE_VALUE)
     //	return -1;
-    /* reset endpoint */
+
+    //reset endpoin
     if(rtlsdr_reset_buffer(dev) < 0)
         return -1;
+    std::thread worker(ThreadProc, nullptr);
+    worker.join();
 
     //worker_handle = (HANDLE) _beginthread( ThreadProc, 0, NULL );
     //if(worker_handle == INVALID_HANDLE_VALUE)
     //	return -1;
 
-    //SetThreadPriority(worker_handle, THREAD_PRIORITY_TIME_CRITICAL);
     return 0;
 }
 //TODO MULTITHREADING
-int Stop_Thread()
-{
+int TSDRPlugin_ExtIO::Stop_Thread(){
     //if(worker_handle == INVALID_HANDLE_VALUE)
     //	return -1;
 
@@ -671,35 +669,50 @@ void ThreadProc(void *p)
     //_endthread();
 
 }
-/*
-static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
-    static HWND hGain;
-    static HBRUSH BRUSH_RED=CreateSolidBrush(RGB(255,0,0));
-    static HBRUSH BRUSH_GREEN=CreateSolidBrush(RGB(0,255,0));
+
+// EL MONSTRUOSIDAD ABERRANTE DEVORADOR DE HOMBRES DE TRES CABEZAS
+//TOOPTIMIZE holy... this function just sucks like its not even setting defaults the original MainDlgProc just seems to be dread inducing
+int* MainCallback(){
+    //TOCHECK TOOPTIMIZE is this really necessary? Like seems too spagheti for a driver
+    for (int i=0; i<(sizeof(directS)/sizeof(directS[0]));i++){
+        //ComboBox_AddString(GetDlgItem(hwndDlg,IDC_DIRECT),directS[i]);
+        handle->HFDirectSamplingCombo->addItem(directS[i]);
+    }
+    handle->HFDirectSamplingCombo->setCurrentIndex(directS_default);
+    rtlsdr_set_direct_sampling(dev, directS_default);
+    //TOCHECK wtf, so its a default that acts like a variable? or is it dependant on the model of the hardware?
+    handle->TunerAGCCheck->setCheckState(TunerAGC_default? Qt::CheckState::Checked : Qt::CheckState::Unchecked);
+    //TOCHECKURGENT why is 0 the true one?
+    rtlsdr_set_tuner_gain_mode(dev,TunerAGC_default?0:1);
+
+    //TOCHECK wtf, so its a default that acts like a variable? or is it dependant on the model of the hardware?
+    handle->RTLAGCCheck->setCheckState(RTLAGC_default? Qt::CheckState::Checked : Qt::CheckState::Unchecked);
+    //TOCHECKURGENT see tocheckurgent above, this time its inverted either people doing the driver have some delusional mindset or theres some weird convention mindset, or this dll SUCK'S!
+    rtlsdr_set_agc_mode(dev,RTLAGC_default?1:0);
+
+    handle->OffsetTuningCheck->setCheckState(OffsetT_default? Qt::CheckState::Checked : Qt::CheckState::Unchecked);
+    //here again theres this weird abomination;
+    rtlsdr_set_offset_tuning(dev,OffsetT_default?1:0);
+
+    //RANT bellow this comment line you can find a masterpiece of windows engineering you might be wondering what does it do, but basically its defining the maximum and minimum for the frequency correction spinner, and not the whole component aparently its just the arrow controls
+    //SendMessage(GetDlgItem(hwndDlg,IDC_PPM_S), UDM_SETRANGE  , (WPARAM)TRUE, (LPARAM)MAX_PPM | (MIN_PPM << 16));
+    //TOCHECK as stated previously this is absolutely disgusting i don't even think you can do this, either way might be some weird convention
+    handle->FrequencyCorrectionSpin->setMaximum(MAX_PPM);
+    handle->FrequencyCorrectionSpin->setMinimum(MIN_PPM << 16);
+
+    //RANT ANOTHER MeMe the original should return a pointer to an int and instead return a false(bool) i guess its supposed to return a blank pointer?
+    //return false;
+    return 0;
+
+}
+
+//static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
+/*static MainDlgProc(uint32_t uMsg, char * wParam, long lParam){
 
     switch (uMsg)
     {
         case WM_INITDIALOG:
         {
-            for (int i=0; i<(sizeof(directS)/sizeof(directS[0]));i++)
-            {
-                ComboBox_AddString(GetDlgItem(hwndDlg,IDC_DIRECT),directS[i]);
-            }
-            ComboBox_SetCurSel(GetDlgItem(hwndDlg,IDC_DIRECT), directS_default );
-            rtlsdr_set_direct_sampling(dev, directS_default);
-
-            Button_SetCheck(GetDlgItem(hwndDlg,IDC_TUNERAGC),TunerAGC_default?BST_CHECKED:BST_UNCHECKED);
-            rtlsdr_set_tuner_gain_mode(dev,TunerAGC_default?0:1);
-
-            Button_SetCheck(GetDlgItem(hwndDlg,IDC_RTLAGC),RTLAGC_default?BST_CHECKED:BST_UNCHECKED);
-            rtlsdr_set_agc_mode(dev,RTLAGC_default?1:0);
-
-            Button_SetCheck(GetDlgItem(hwndDlg,IDC_OFFSET),OffsetT_default?BST_CHECKED:BST_UNCHECKED);
-            rtlsdr_set_offset_tuning(dev,OffsetT_default?1:0);
-
-            SendMessage(GetDlgItem(hwndDlg,IDC_PPM_S), UDM_SETRANGE  , (WPARAM)TRUE, (LPARAM)MAX_PPM | (MIN_PPM << 16));
-
             TCHAR tempStr[255];
             _stprintf_s(tempStr,255, TEXT("%d"), ppm_default);
             Edit_SetText(GetDlgItem(hwndDlg,IDC_PPM), tempStr );
@@ -991,7 +1004,8 @@ static INT_PTR CALLBACK MainDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPAR
 
     }
 
-    return FALSE;
+    return false;
 }
-
 */
+
+
