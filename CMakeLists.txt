@@ -43,7 +43,8 @@ else()
 # Define properties for Android with Qt 5 after find_package() calls as:
 #    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
-        add_executable(EXTIO_tempest
+        #add_executable(EXTIO_tempest ${PROJECT_SOURCES})
+        add_library(EXTIO_tempest SHARED
             ${PROJECT_SOURCES}
         )
     endif()

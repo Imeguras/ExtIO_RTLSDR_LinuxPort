@@ -11,6 +11,12 @@
 //#include "resource.h"
 #include "rtl-sdr.h"
 
+
+#include <QApplication>
+#include <QLocale>
+#include <QTranslator>
+
+
 // GLOBAL TODO, since i am far from mastering c++, and im very comfortable in using C i used a lot of functions that are "buffer unsafe" later we have to change some visibilities, and exchange the functions that handle memory
 
 
@@ -92,8 +98,8 @@ static int device_count = 0;
 
 void ThreadProc(void * param);
 
-int Start_Thread();
-int Stop_Thread();
+//int Start_Thread();
+//int Stop_Thread();
 
 
 
@@ -102,10 +108,12 @@ short *short_buf = NULL;
 
 /* ExtIO Callback */
 void (* WinradCallBack)(int, int, float, void *) = NULL;
+int* MainCallback();
 #define WINRAD_SRCHANGE 100
 #define WINRAD_LOCHANGE 101
 #define WINRAD_ATTCHANGE 125
-
+//It may seem like a meme but its a reference to this object to be used in a static context / in C
+TSDRPlugin_ExtIO* thisObject;
 Ui_TSDRPlugin_ExtIO* handle;
 QMessageBox* msgBox;
 
@@ -122,7 +130,8 @@ TSDRPlugin_ExtIO::TSDRPlugin_ExtIO(QWidget *parent)
     ui->setupUi(this);
     handle=this->ui;
     msgBox=&messageBox;
-
+    thisObject= this;
+    this->show();
     //InitHW(name, model, tipe);
     //MainCallback();
 }
@@ -133,6 +142,35 @@ TSDRPlugin_ExtIO::~TSDRPlugin_ExtIO()
 }
 
 
+
+
+//void LIBRTL_API __stdcall ShowGUI()
+extern "C"
+void ShowGUI(){
+     reinterpret_cast<TSDRPlugin_ExtIO *>(thisObject)->show();
+
+    return;
+}
+//void LIBRTL_API  __stdcall HideGUI()
+
+extern "C"
+void HideGUI(){
+
+    reinterpret_cast<TSDRPlugin_ExtIO *>(thisObject)->hide();
+    return;
+}
+//void LIBRTL_API  __stdcall SwitchGUI()
+
+extern "C"
+void SwitchGUI()
+{
+    if ( reinterpret_cast<TSDRPlugin_ExtIO *>(thisObject)->isHidden())
+         reinterpret_cast<TSDRPlugin_ExtIO *>(thisObject)->show();
+    else
+      reinterpret_cast<TSDRPlugin_ExtIO *>(thisObject)->hide();
+    return;
+}
+
 //bool  LIBRTL_API __stdcall InitHW(char *name, char *model, int& type)
 
 extern "C"
@@ -142,9 +180,9 @@ bool InitHW(char *name, char *model, int& type){
 
     device_count = rtlsdr_get_device_count();
     if (!device_count){
-        reinterpret_cast<QMessageBox *>(msgBox)->setText("No RTLSDR devices found");
-        reinterpret_cast<QMessageBox *>(msgBox)->exec();
-        qDebug() << "No RTLSDR devices found";
+        //reinterpret_cast<QMessageBox *>(msgBox)->setText("No RTLSDR devices found");
+        //reinterpret_cast<QMessageBox *>(msgBox)->exec();
+        printf("No RTLSDR devices found");
         return false;
     }
 
@@ -156,6 +194,7 @@ bool InitHW(char *name, char *model, int& type){
     strcpy(model,connected_devices[0].product);
 
 
+    main(0, NULL);
     //strcpy and other associated str functions already append the 0 on the last position
     //name[15]=0;
     //model[15]=0;
@@ -179,12 +218,16 @@ extern "C"
 bool OpenHW(){
     //MessageBox(NULL, TEXT("OpenHW"),NULL, MB_OK);
     int r;
+    //ShowGUI();
+    //MainCallback();
 
     if ( device_default>=device_count) device_default=0;
     r = rtlsdr_open(&dev,device_default);
 
+
     if(r < 0) {
-//		MessageBox(NULL, TEXT("OpenHW Fudeu"),NULL, MB_OK);
+        reinterpret_cast<QMessageBox *>(msgBox)->setText("Interacting with rtl dongle failed, check if its properly connected?");
+        reinterpret_cast<QMessageBox *>(msgBox)->exec();
         return false;
     }
 
@@ -192,10 +235,15 @@ bool OpenHW(){
     if( r < 0)
         return false;
 
+    reinterpret_cast<QMessageBox *>(msgBox)->setText("Done!");
+    reinterpret_cast<QMessageBox *>(msgBox)->exec();
+
     /*h_dialog=CreateDialog(hInst, MAKEINTRESOURCE(IDD_RTL_SETTINGS), NULL, (DLGPROC)MainDlgProc);
-    ShowWindow(h_dialog,SW_HIDE);
+
 
     */
+
+    rtlsdr_close(dev);
 
     return true;
 }
@@ -251,11 +299,11 @@ int StartHW(long freq)
         return -1;
     }
 
-    if(Start_Thread()<0)
+    /*if(Start_Thread()<0)
     {
         delete[] short_buf;
         return -1;
-    }
+    }*/
 
     SetHWLO(freq);
 
@@ -569,35 +617,7 @@ void CloseHW(){
         reinterpret_cast<Ui_TSDRPlugin_ExtIO *>(handle)->~Ui_TSDRPlugin_ExtIO();
     }
 }
-//void LIBRTL_API __stdcall ShowGUI()
-//TODO
-extern "C"
-void ShowGUI(){
 
-    //ShowWindow(h_dialog,SW_SHOW);
-    //SetForegroundWindow(h_dialog);
-    return;
-}
-//void LIBRTL_API  __stdcall HideGUI()
-//TODO
-extern "C"
-void HideGUI(){
-    //ShowWindow(h_dialog,SW_HIDE);
-    return;
-}
-//void LIBRTL_API  __stdcall SwitchGUI()
-//TODO
-extern "C"
-void SwitchGUI()
-{
-    /*
-    if (IsWindowVisible(h_dialog))
-        ShowWindow(h_dialog,SW_HIDE);
-    else
-        ShowWindow(h_dialog,SW_SHOW);
-    */
-    return;
-}
 
 //void LIBRTL_API __stdcall SetCallback(void (* myCallBack)(int, int, float, void *))
 extern "C"
@@ -1007,5 +1027,24 @@ int* MainCallback(){
     return false;
 }
 */
+int main(int argc, char *argv[]) {
+  QApplication a(argc, argv);
+
+  QTranslator translator;
+  const QStringList uiLanguages = QLocale::system().uiLanguages();
+  for (const QString &locale : uiLanguages) {
+    const QString baseName = "EXTIO_tempest_" + QLocale(locale).name();
+    if (translator.load(":/i18n/" + baseName)) {
+      a.installTranslator(&translator);
+      break;
+    }
+  }
+
+  TSDRPlugin_ExtIO w;
+  //w.show();
+
+
+  return a.exec();
+}
 
 
