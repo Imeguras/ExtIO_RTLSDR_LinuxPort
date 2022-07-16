@@ -21,3 +21,8 @@ a republics article(basically a "law notice") about the licensing rights refered
 https://ead.ipleiria.pt/2021-22/pluginfile.php/155131/mod_resource/content/2/Regulamento_de_propriedade_intelectual_do_IPL.pdf
 
 Also i don't feel like doing the url's right now or other markdown formatting if you're seeing this message, its a TODO here
+## Updates as of 16/07/2022
+As i was writting the report for my final project i remembered giving a short mention of this project, and forgot i hadn't updated anything on the status of this repo, although the idea of keeping compatibility with all OS's was put on table this quickly proved to be very costly and not focused on the project objective so i "stopped" developing this interface for the final project
+
+### However
+I bought the RTL-SDR and has such decided to develop this project on my own time. As you can see by the commit history i havent had a lot of time to do so...
